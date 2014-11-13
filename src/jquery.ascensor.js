@@ -123,7 +123,7 @@
         "right": "ascensor-right"
       };
 
-      // Setup global variable - selector 
+      // Setup global variable - selector
       this.node = $(this.element);
       this.nodeChildren = this.node.children(this.options.childType);
       this.floorActive = (isNumber(this._getFloorFromHash())) ? this._getFloorFromHash() : this.options.windowsOn;
@@ -177,6 +177,10 @@
 
       this.node.on('scrollToDirection', function(event, direction) {
         self.scrollToDirection(direction);
+      });
+
+      this.node.on('teletransportToFloor', function(event, floor) {
+        self.teletransportToFloor(floor);
       });
 
       this.node.on('scrollToStage', function(event, floor) {
@@ -255,7 +259,7 @@
 
         var touchEvent = 'touchstart.ascensor touchend.ascensor touchcancel.ascensor';
 
-        // If mobile-only, only use touchstart/end event				
+        // If mobile-only, only use touchstart/end event
         if (this.options.swipeNavigation !== 'mobile-only') touchEvent += ' mousedown.ascensor mouseup.ascensor';
 
         // Listen to touch event
@@ -502,6 +506,54 @@
       }
     },
 
+    teletransportToFloor: function(floor, fadeOutSpeed, fadeInSpeed){
+      //console.log("teletransportToFloor", typeof floor, floor);
+
+      if(!isString(floor) && !isNumber(floor)) { return false; }
+
+      // If floor send is a string, check if it matches any of ascensorFloorNames, then use its position in the array
+      if (isString(floor) && existInArray(this.options.ascensorFloorName, floor)) floor = this.options.ascensorFloorName.indexOf(floor);
+
+      // do no thing is floor doesn't existing
+      if (isNumber(floor) &&  floor < 0 || floor > this.nodeChildren.length - 1){
+        return false;
+      }
+
+      var animate = (floor === this.floorActive) ? false : true;
+
+      if(!animate){ return; }
+      var self = this;
+      this._emitEvent('teletransportStart', self.floorActive, floor);
+
+      //overwrite speed to fast if values are not valid
+      if( !(isString(fadeOutSpeed) && fadeOutSpeed === 'slow') && !(isNumber(fadeOutSpeed) && fadeOutSpeed >= 0) ) {
+        fadeOutSpeed = 'fast';
+      }
+      if( !(isString(fadeInSpeed) && fadeInSpeed === 'slow') && !(isNumber(fadeInSpeed) && fadeInSpeed >= 0) ) {
+        fadeInSpeed = 'fast';
+      }
+      // console.log ("fadeOutSpeed: ", typeof fadeOutSpeed, fadeOutSpeed);
+      // console.log ("fadeInSpeed: ", typeof fadeInSpeed, fadeInSpeed);
+
+      self.node.stop().fadeTo(fadeOutSpeed, 0, function teletransportScrollToFloor(){
+
+        var saveFloorActive = self.floorActive;
+        // Make sure position is correct
+        var animationObject = self._getAnimationSettings(floor);
+
+        self.node.stop().animate(animationObject.property, 0, false, function teletransporScrollCallback(){
+            self.node.stop().fadeTo(fadeInSpeed, 1, function teletransportFadeInCallback(){
+              self._emitEvent('teletransportEnd', saveFloorActive, floor);
+              self._updateHash(floor);
+            });
+        });
+
+        self.floorActive = floor;
+        self.node.data('current-floor', this.floorActive);
+
+      });
+
+    },
 
     /* Resize handler. Update scrollTop & scrollLeft position */
     scrollToFloor: function(floor) {
@@ -519,8 +571,8 @@
       var animationObject = this._getAnimationSettings(floor);
 
       if (animate) {
-        this._emitEvent('scrollStart', self.floorActive, floor);
-        this.node.stop().animate(animationObject.property, self.options.time, self.options.easing, animationObject.callback);
+          this._emitEvent('scrollStart', self.floorActive, floor);
+          this.node.stop().animate(animationObject.property, self.options.time, self.options.easing, animationObject.callback);
       } else {
         this.node.stop().scrollTop(animationObject.defaults.scrollTop).scrollLeft(animationObject.defaults.scrollLeft);
       }
@@ -590,7 +642,7 @@
       }
 
 
-      // If direction is horizontal	
+      // If direction is horizontal
       // => set scrollleft property & return animationSettings
       else if (self.options.direction === 'x') {
         animationSettings.property.scrollLeft = floor * self.NW;
@@ -661,8 +713,8 @@
 
         }
 
-        // If queud option is not set, 
-        // => set scrollTop & ScrollLeft property 
+        // If queud option is not set,
+        // => set scrollTop & ScrollLeft property
         // => return animationSettings
         else {
           animationSettings.property.scrollTop = scrollTopValue;
@@ -688,11 +740,11 @@
       var directionIsHorizontal = (direction == 'right' || direction == 'left');
       var directionIsVertical = (direction == 'down' || direction == 'up');
 
-      // If direction is x or y and there is 
+      // If direction is x or y and there is
       // direction are opppsite, return here
       if ((self.options.direction == 'y' && directionIsHorizontal) || (self.options.direction == 'x' && directionIsVertical)) return;
 
-      // If direction is x or x, and 
+      // If direction is x or x, and
       // direction match, use prev/next
       if ((self.options.direction == 'y' && direction == 'down') || (self.options.direction == 'x' && direction == 'right')) return self.next();
       if ((self.options.direction == 'y' && direction == 'up') || (self.options.direction == 'x' && direction == 'left')) return self.prev();
@@ -706,7 +758,7 @@
         var directFloor = floorObject[direction];
         if (isNumber(directFloor)) return self.scrollToFloor(directFloor);
 
-        // Jump is set to true, use the 
+        // Jump is set to true, use the
         // closest floor in that same direction
         var closestFloor = floorObject.closest[direction];
         if (isTrue(self.options.jump) && isNumber(closestFloor)) return self.scrollToFloor(closestFloor);
@@ -810,13 +862,13 @@
         // If on same axis
         if (map[oppositeAxis] == (DA[floorIndex][oppositeAxis] + level)) {
 
-          // If direction is foward (right or down) and the value is bigger than goal 
+          // If direction is foward (right or down) and the value is bigger than goal
           // of if direction is backward (left or up) and the value is smaller than the goal
           if (((direction == 'right' || direction == 'down') && map[axis] > goal) || ((direction == 'left' || direction == 'up') && map[axis] < goal)) {
 
 
             // No previous value set or if the current
-            // value is smaller than the previous one					 
+            // value is smaller than the previous one
             if (!closestMap || Math.abs(map[axis] - goal) < Math.abs(closestMap[axis])) {
               closestIndex = index;
               closestMap = map;
@@ -875,7 +927,7 @@
         return self.nodeChildren.length > index;
       });
 
-      // Loop on the diration array and get 
+      // Loop on the diration array and get
       // the floor ID for each direction
       $.each(DA, function(index, floorItem) {
         self.floorMap[index] = {
@@ -902,6 +954,13 @@
             'left': self._getFurthestFloorIndex(DA, index, 'left')
           }
         };
+
+
+
+
+
+
+
       });
 
       function getFurtherFloorArray(floorArray, axis) {
